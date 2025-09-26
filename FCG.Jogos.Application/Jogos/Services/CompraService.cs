@@ -30,7 +30,7 @@ public class CompraService : ICompraService
             UsuarioId = request.UsuarioId,
             JogoId = request.JogoId,
             PrecoPago = request.PrecoPago,
-            DataCompra = DateTime.UtcNow,
+            DataCompra = DateTimeOffset.UtcNow,
             Status = StatusCompra.Pendente
         };
 
@@ -110,7 +110,7 @@ public class CompraService : ICompraService
 
         var codigoAtivacao = Guid.NewGuid().ToString("N").Substring(0, 16).ToUpper();
         compra.CodigoAtivacao = codigoAtivacao;
-        compra.DataAtivacao = DateTime.UtcNow;
+        compra.DataAtivacao = DateTimeOffset.UtcNow;
 
         await _compraRepository.AtualizarAsync(compra);
         return codigoAtivacao;
@@ -124,11 +124,11 @@ public class CompraService : ICompraService
             UsuarioId = compra.UsuarioId,
             JogoId = compra.JogoId,
             PrecoPago = compra.PrecoPago,
-            DataCompra = compra.DataCompra,
+            DataCompra = compra.DataCompra.UtcDateTime,
             Status = compra.Status,
             CodigoAtivacao = compra.CodigoAtivacao,
-            DataCriacao = compra.DataCriacao,
-            DataAtualizacao = compra.DataAtualizacao
+            DataCriacao = compra.DataCriacao.UtcDateTime,
+            DataAtualizacao = compra.DataAtualizacao?.UtcDateTime
         };
     }
-} 
+}

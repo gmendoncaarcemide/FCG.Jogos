@@ -33,7 +33,7 @@ public abstract class Repository<T> : IRepository<T> where T : Entity
 
     public virtual async Task<T> AtualizarAsync(T entity)
     {
-        entity.DataAtualizacao = DateTime.UtcNow;
+        entity.DataAtualizacao = DateTimeOffset.UtcNow;
         _dbSet.Update(entity);
         await _context.SaveChangesAsync();
         return entity;
@@ -45,10 +45,10 @@ public abstract class Repository<T> : IRepository<T> where T : Entity
         if (entity != null)
         {
             entity.Ativo = false;
-            entity.DataAtualizacao = DateTime.UtcNow;
+            entity.DataAtualizacao = DateTimeOffset.UtcNow;
             await _context.SaveChangesAsync();
             return true;
         }
         return false;
     }
-} 
+}

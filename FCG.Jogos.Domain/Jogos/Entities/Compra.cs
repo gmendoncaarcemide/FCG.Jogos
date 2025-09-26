@@ -1,4 +1,5 @@
 using FCG.Jogos.Domain.Base;
+using System;
 
 namespace FCG.Jogos.Domain.Jogos.Entities;
 
@@ -7,10 +8,10 @@ public class Compra : Entity
     public Guid UsuarioId { get; set; }
     public Guid JogoId { get; set; }
     public decimal PrecoPago { get; set; }
-    public DateTime DataCompra { get; set; }
+    public DateTimeOffset DataCompra { get; set; }
     public StatusCompra Status { get; set; }
     public string? CodigoAtivacao { get; set; }
-    public DateTime? DataAtivacao { get; set; }
+    public DateTimeOffset? DataAtivacao { get; set; }
     public string? Observacoes { get; set; }
     
     // Propriedades de navegação

@@ -8,7 +8,7 @@ public class Jogo : Entity
     public required string Descricao { get; set; }
     public required string Desenvolvedor { get; set; }
     public required string Editora { get; set; }
-    public DateTime DataLancamento { get; set; }
+    public DateTimeOffset DataLancamento { get; set; }
     public decimal Preco { get; set; }
     public string? ImagemUrl { get; set; }
     public string? VideoUrl { get; set; }
@@ -42,6 +42,7 @@ public enum CategoriaJogo
 
 public enum ClassificacaoIndicativa
 {
+    Desconhecida = 0,
     Livre = 1,
     Maior10 = 2,
     Maior12 = 3,

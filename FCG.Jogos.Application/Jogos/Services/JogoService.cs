@@ -22,7 +22,7 @@ public class JogoService : IJogoService
             Descricao = request.Descricao,
             Desenvolvedor = "Desenvolvedor Padrão", // Valor padrão
             Editora = "Editora Padrão", // Valor padrão
-            DataLancamento = DateTime.UtcNow,
+            DataLancamento = DateTimeOffset.UtcNow,
             Preco = request.Preco,
             Estoque = request.Estoque,
             Tags = request.Tags,
@@ -113,8 +113,8 @@ public class JogoService : IJogoService
             Categoria = jogo.Categoria,
             Avaliacao = jogo.AvaliacaoMedia,
             Vendas = 0, // Será calculado dinamicamente
-            DataCriacao = jogo.DataCriacao,
-            DataAtualizacao = jogo.DataAtualizacao
+            DataCriacao = jogo.DataCriacao.UtcDateTime,
+            DataAtualizacao = jogo.DataAtualizacao?.UtcDateTime
         };
     }
-} 
+}
