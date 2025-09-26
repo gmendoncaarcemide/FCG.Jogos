@@ -6,6 +6,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <!-- Avoid generating apphost.exe in Debug to prevent file lock on FCG.Jogos.API.exe -->
+  <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+    <UseAppHost>false</UseAppHost>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.0" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.4" />
@@ -22,5 +27,21 @@
     <ProjectReference Include="..\FCG.Jogos.Application\FCG.Jogos.Application.csproj" />
     <ProjectReference Include="..\FCG.Jogos.Infrastructure\FCG.Jogos.Infrastructure.csproj" />
   </ItemGroup>
+
+  <!-- Ensure no stale API process locks bin/obj before build (Windows only) -->
+  <Target Name="KillRunningApi" BeforeTargets="BeforeBuild;Compile;CoreCompile;Build;CopyFilesToOutputDirectory" Condition=" '$(OS)' == 'Windows_NT' ">
+    <!-- Try kill by image name (common case when apphost is locking files) -->
+    <Exec Command="taskkill /F /IM FCG.Jogos.API.exe" ContinueOnError="true" />
+    <!-- Also try via PowerShell by process name -->
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$p = Get-Process -Name 'FCG.Jogos.API' -ErrorAction SilentlyContinue; if ($p) { Stop-Process -Id ($p.Id) -Force }&quot;" ContinueOnError="true" />
+    <!-- Kill any 'dotnet' process whose command line references this project (dotnet run/watch cases) -->
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$procs = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'dotnet.exe' -and $_.CommandLine -match 'FCG.Jogos.API' }; if ($procs) { $procs | ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force } catch {} } }&quot;" ContinueOnError="true" />
+    <!-- Kill IIS Express if it is holding the ports -->
+    <Exec Command="taskkill /F /IM iisexpress.exe" ContinueOnError="true" />
+    <!-- And finally, kill any listener on our dev ports (IIS Express or stale dotnet run) -->
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;Get-NetTCPConnection -LocalPort 61821,61823 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { try { Stop-Process -Id $_.OwningProcess -Force } catch {} }&quot;" ContinueOnError="true" />
+    <!-- Small delay to ensure file handles are released before copy -->
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -Command Start-Sleep -Seconds 1" ContinueOnError="true" />
+  </Target>
 
 </Project>

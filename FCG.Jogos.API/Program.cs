@@ -4,7 +4,6 @@ using FCG.Jogos.Domain.Jogos.Interfaces;
 using FCG.Jogos.Domain.Jogos.Entities;
 using FCG.Jogos.Infrastructure.Jogos.Repositories;
 using FCG.Jogos.Infrastructure;
-using FCG.Jogos.API.Endpoints;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,6 +11,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddControllers();
 
 // Database
 builder.Services.AddDbContext<JogosDbContext>(options =>
@@ -58,9 +58,8 @@ var app = builder.Build();
 
 app.UseHttpsRedirection();
 
-// Map endpoints
-app.MapJogoEndpoints();
-app.MapCompraEndpoints();
+// Map controllers
+app.MapControllers();
 
 // Redirect root to Swagger UI for convenience
 app.MapGet("/", () => Results.Redirect("/swagger"));
