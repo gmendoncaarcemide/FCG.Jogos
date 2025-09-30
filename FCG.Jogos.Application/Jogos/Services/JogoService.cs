@@ -8,10 +8,12 @@ namespace FCG.Jogos.Application.Jogos.Services;
 public class JogoService : IJogoService
 {
     private readonly IJogoRepository _jogoRepository;
+    private readonly IJogoSearchProvider _searchProvider;
 
-    public JogoService(IJogoRepository jogoRepository)
+    public JogoService(IJogoRepository jogoRepository, IJogoSearchProvider searchProvider)
     {
         _jogoRepository = jogoRepository;
+        _searchProvider = searchProvider;
     }
 
     public async Task<JogoResponse> CriarAsync(CriarJogoRequest request)
@@ -33,6 +35,8 @@ public class JogoService : IJogoService
         };
 
         var jogoCriado = await _jogoRepository.AdicionarAsync(jogo);
+        // Indexar no Elasticsearch (não bloquear em caso de erro)
+        try { await _searchProvider.IndexAsync(jogoCriado); } catch { /* log via provider */ }
         return MapearParaResponse(jogoCriado);
     }
 
@@ -63,12 +67,16 @@ public class JogoService : IJogoService
         if (request.Categoria.HasValue) jogo.Categoria = request.Categoria.Value;
 
         var jogoAtualizado = await _jogoRepository.AtualizarAsync(jogo);
+        // Reindexar no Elasticsearch
+        try { await _searchProvider.IndexAsync(jogoAtualizado); } catch { }
         return MapearParaResponse(jogoAtualizado);
     }
 
     public async Task ExcluirAsync(Guid id)
     {
         await _jogoRepository.ExcluirAsync(id);
+        // Remover do Elasticsearch
+        try { await _searchProvider.DeleteAsync(id); } catch { }
     }
 
     public async Task<IEnumerable<JogoResponse>> BuscarAsync(BuscarJogosRequest request)
