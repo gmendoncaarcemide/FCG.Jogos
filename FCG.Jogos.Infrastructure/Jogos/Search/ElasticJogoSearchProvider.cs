@@ -27,7 +27,7 @@ public class ElasticJogoSearchProvider : IJogoSearchProvider
         _logger = logger;
     }
 
-    private string BaseUrl => string.IsNullOrWhiteSpace(_options.Node) ? "http://localhost:9200" : _options.Node!;
+    private string BaseUrl => ResolveBaseUrl();
     private string Index => string.IsNullOrWhiteSpace(_options.IndexName) ? "jogos" : _options.IndexName;
 
     private HttpClient CreateClient()
@@ -44,6 +44,48 @@ public class ElasticJogoSearchProvider : IJogoSearchProvider
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", raw);
         }
         return client;
+    }
+
+    private string ResolveBaseUrl()
+    {
+        // 1) If CloudId is provided (Elastic Cloud), derive the HTTPS endpoint.
+        // Cloud ID format: "<deployment_name>:<base64 of 'es_uuid:es_hostname$kb_uuid:kb_hostname'>"
+        // We need the es_hostname, and we will use https://<es_hostname>
+        if (!string.IsNullOrWhiteSpace(_options.CloudId))
+        {
+            try
+            {
+                var parts = _options.CloudId!.Split(':', 2);
+                if (parts.Length == 2)
+                {
+                    var decoded = Encoding.UTF8.GetString(Convert.FromBase64String(parts[1]));
+                    // decoded example: "es_uuid:abcdefg.us-central1.gcp.elastic-cloud.com$kb_uuid:..."
+                    var first = decoded.Split('$')[0];
+                    var esTokens = first.Split(':');
+                    if (esTokens.Length >= 2)
+                    {
+                        var host = esTokens[1];
+                        if (!string.IsNullOrWhiteSpace(host))
+                        {
+                            return $"https://{host}";
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to parse Elasticsearch CloudId. Falling back to localhost:9200");
+            }
+        }
+
+        // 2) If Node is explicitly set, honor it.
+        if (!string.IsNullOrWhiteSpace(_options.Node))
+        {
+            return _options.Node!;
+        }
+
+        // 3) Fallback to localhost (dev only)
+        return "http://localhost:9200";
     }
 
     public async Task IndexAsync(Jogo jogo, CancellationToken ct = default)

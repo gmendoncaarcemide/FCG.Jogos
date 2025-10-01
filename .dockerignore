@@ -1,0 +1,16 @@
+**/bin/
+**/obj/
+**/.vs/
+**/.idea/
+**/.git/
+**/.gitignore
+**/*.user
+**/*.suo
+**/*.swp
+**/node_modules/
+**/logs/
+**/*.log
+**/TestResults/
+**/coverage/
+Dockerfile
+*.md
