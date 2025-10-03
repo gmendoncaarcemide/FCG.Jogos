@@ -1,7 +1,12 @@
+using System.Net.Http;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using FCG.Jogos.Application.Jogos.Interfaces;
 using FCG.Jogos.Application.Jogos.ViewModels;
 using FCG.Jogos.Domain.Jogos.Entities;
 using FCG.Jogos.Domain.Jogos.Interfaces;
+using Microsoft.Extensions.Configuration;
 
 namespace FCG.Jogos.Application.Jogos.Services;
 
@@ -9,11 +14,15 @@ public class CompraService : ICompraService
 {
     private readonly ICompraRepository _compraRepository;
     private readonly IJogoRepository _jogoRepository;
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IConfiguration _configuration;
 
-    public CompraService(ICompraRepository compraRepository, IJogoRepository jogoRepository)
+    public CompraService(ICompraRepository compraRepository, IJogoRepository jogoRepository, IHttpClientFactory httpClientFactory, IConfiguration configuration)
     {
         _compraRepository = compraRepository;
         _jogoRepository = jogoRepository;
+        _httpClientFactory = httpClientFactory;
+        _configuration = configuration;
     }
 
     public async Task<CompraResponse> CriarCompraAsync(CompraRequest request)
@@ -25,18 +34,86 @@ public class CompraService : ICompraService
         if (jogo.Estoque <= 0)
             throw new InvalidOperationException("Jogo sem estoque disponível");
 
+        // 1) Chamar serviço externo de pagamento antes de persistir
+        var baseUrl = _configuration.GetValue<string>("Payment:BaseUrl");
+        if (string.IsNullOrWhiteSpace(baseUrl))
+        {
+            throw new InvalidOperationException("Configuração de pagamento ausente: 'Payment:BaseUrl'.");
+        }
+
+        var client = _httpClientFactory.CreateClient();
+        client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+
+        // Determina o tipo efetivo de pagamento (prefere dados presentes)
+        int? effectiveTipo = request.TipoPagamento;
+        if (request.DadosCartao != null) effectiveTipo = 1;
+        else if (request.DadosPIX != null) effectiveTipo = 2;
+        else if (request.DadosBoleto != null) effectiveTipo = 3;
+
+        if (!effectiveTipo.HasValue)
+        {
+            throw new InvalidOperationException("Tipo de pagamento não informado e não foi possível inferir pelos dados enviados.");
+        }
+
+        // Monta o payload esperado pelo serviço de pagamentos
+        var payload = new
+        {
+            usuarioId = request.UsuarioId,
+            jogoId = request.JogoId,
+            valor = jogo.Preco,
+            tipoPagamento = effectiveTipo,
+            dadosCartao = request.DadosCartao == null ? null : new
+            {
+                numeroCartao = request.DadosCartao.NumeroCartao,
+                nomeTitular = request.DadosCartao.NomeTitular,
+                dataValidade = request.DadosCartao.DataValidade,
+                cvv = request.DadosCartao.Cvv,
+                parcelas = request.DadosCartao.Parcelas
+            },
+            dadosPIX = request.DadosPIX == null ? null : new
+            {
+                chavePIX = request.DadosPIX.ChavePIX,
+                nomeBeneficiario = request.DadosPIX.NomeBeneficiario
+            },
+            dadosBoleto = request.DadosBoleto == null ? null : new
+            {
+                cpfCnpj = request.DadosBoleto.CpfCnpj,
+                nomePagador = request.DadosBoleto.NomePagador,
+                endereco = request.DadosBoleto.Endereco,
+                cep = request.DadosBoleto.Cep,
+                cidade = request.DadosBoleto.Cidade,
+                estado = request.DadosBoleto.Estado
+            },
+            observacoes = request.Observacoes
+        };
+
+        var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        };
+        var json = JsonSerializer.Serialize(payload, jsonOptions);
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+        var resp = await client.PostAsync("api/Transacoes", content);
+
+        if (!resp.IsSuccessStatusCode)
+        {
+            var body = await resp.Content.ReadAsStringAsync();
+            throw new InvalidOperationException($"Pagamento não autorizado: {(int)resp.StatusCode} {resp.ReasonPhrase} - {body}");
+        }
+
+        // 2) Pagamento OK -> criar compra aprovada e atualizar estoque
         var compra = new Compra
         {
             UsuarioId = request.UsuarioId,
             JogoId = request.JogoId,
-            PrecoPago = request.PrecoPago,
+            PrecoPago = jogo.Preco,
             DataCompra = DateTimeOffset.UtcNow,
-            Status = StatusCompra.Pendente
+            Status = StatusCompra.Aprovada,
+            Observacoes = request.Observacoes
         };
 
         var compraCriada = await _compraRepository.AdicionarAsync(compra);
 
-        // Atualiza o estoque do jogo
         jogo.Estoque--;
         await _jogoRepository.AtualizarAsync(jogo);
 
