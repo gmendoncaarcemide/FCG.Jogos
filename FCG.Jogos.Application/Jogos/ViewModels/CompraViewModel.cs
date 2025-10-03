@@ -62,7 +62,7 @@ public class CompraRequest : IValidatableObject
                 results.Add(new ValidationResult("Chave PIX é obrigatória.", new[] { nameof(DadosPIX.ChavePIX) }));
             }
         }
-        else if (tipo == 2)
+        else if (tipo == 4)
         {
             if (DadosBoleto == null)
             {

@@ -43,12 +43,18 @@ public class CompraService : ICompraService
 
         var client = _httpClientFactory.CreateClient();
         client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+        var subscriptionKey = _configuration.GetValue<string>("Payment:SubscriptionKey");
+        if (!string.IsNullOrWhiteSpace(subscriptionKey))
+        {
+            client.DefaultRequestHeaders.Remove("Ocp-Apim-Subscription-Key");
+            client.DefaultRequestHeaders.Add("Ocp-Apim-Subscription-Key", subscriptionKey);
+        }
 
         // Determina o tipo efetivo de pagamento (prefere dados presentes)
         int? effectiveTipo = request.TipoPagamento;
         if (request.DadosCartao != null) effectiveTipo = 1;
-        else if (request.DadosPIX != null) effectiveTipo = 2;
-        else if (request.DadosBoleto != null) effectiveTipo = 3;
+        else if (request.DadosPIX != null) effectiveTipo = 3;
+        else if (request.DadosBoleto != null) effectiveTipo = 4;
 
         if (!effectiveTipo.HasValue)
         {
