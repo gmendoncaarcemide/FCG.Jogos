@@ -1,5 +1,6 @@
 using FCG.Jogos.Domain.Jogos.Entities;
 using Microsoft.EntityFrameworkCore;
+using FCG.Jogos.Infrastructure.Jogos.EventSourcing;
 
 namespace FCG.Jogos.Infrastructure;
 
@@ -11,6 +12,7 @@ public class JogosDbContext : DbContext
 
     public DbSet<Jogo> Jogos { get; set; }
     public DbSet<Compra> Compras { get; set; }
+    public DbSet<StoredEvent> StoredEvents { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -53,6 +55,18 @@ public class JogosDbContext : DbContext
 
             // We don't have an entity for Usuario; keep scalar UsuarioId but ignore navigation
             entity.Ignore(e => e.Usuario);
+        });
+
+        modelBuilder.Entity<StoredEvent>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.AggregateType).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.EventType).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Data).IsRequired();
+            entity.Property(e => e.OccurredOn).HasColumnType("timestamptz");
+            entity.Property(e => e.CorrelationId).HasMaxLength(100);
+            entity.HasIndex(e => new { e.AggregateType, e.AggregateId });
+            entity.HasIndex(e => e.OccurredOn);
         });
     }
 }
