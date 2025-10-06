@@ -6,6 +6,8 @@ using FCG.Jogos.Infrastructure.Jogos.Repositories;
 using FCG.Jogos.Infrastructure;
 using FCG.Jogos.Infrastructure.Jogos.Search;
 using Microsoft.EntityFrameworkCore;
+using FCG.Jogos.Domain.Base;
+using FCG.Jogos.Infrastructure.Jogos.EventSourcing;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -47,6 +49,9 @@ builder.Services.AddElasticsearch(builder.Configuration);
 // Repositories
 builder.Services.AddScoped<IJogoRepository, JogoRepository>();
 builder.Services.AddScoped<ICompraRepository, CompraRepository>();
+
+// Event Store
+builder.Services.AddScoped<IEventStore, EventStore>();
 
 // Services
 builder.Services.AddScoped<IJogoService, JogoService>();
