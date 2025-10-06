@@ -7,6 +7,7 @@ using FCG.Jogos.Application.Jogos.ViewModels;
 using FCG.Jogos.Domain.Jogos.Entities;
 using FCG.Jogos.Domain.Jogos.Interfaces;
 using Microsoft.Extensions.Configuration;
+using FCG.Jogos.Domain.Base;
 
 namespace FCG.Jogos.Application.Jogos.Services;
 
@@ -16,13 +17,15 @@ public class CompraService : ICompraService
     private readonly IJogoRepository _jogoRepository;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _configuration;
+    private readonly IEventStore _eventStore;
 
-    public CompraService(ICompraRepository compraRepository, IJogoRepository jogoRepository, IHttpClientFactory httpClientFactory, IConfiguration configuration)
+    public CompraService(ICompraRepository compraRepository, IJogoRepository jogoRepository, IHttpClientFactory httpClientFactory, IConfiguration configuration, IEventStore eventStore)
     {
         _compraRepository = compraRepository;
         _jogoRepository = jogoRepository;
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
+        _eventStore = eventStore;
     }
 
     public async Task<CompraResponse> CriarCompraAsync(CompraRequest request)
@@ -120,8 +123,38 @@ public class CompraService : ICompraService
 
         var compraCriada = await _compraRepository.AdicionarAsync(compra);
 
+        // Event: compra aprovada/criada
+        await _eventStore.AppendAsync(
+            aggregateType: nameof(Compra),
+            aggregateId: compraCriada.Id,
+            eventType: "CompraAprovada",
+            data: new
+            {
+                compraId = compraCriada.Id,
+                usuarioId = compraCriada.UsuarioId,
+                jogoId = compraCriada.JogoId,
+                precoPago = compraCriada.PrecoPago,
+                dataCompra = compraCriada.DataCompra,
+                status = compraCriada.Status.ToString()
+            }
+        );
+
         jogo.Estoque--;
         await _jogoRepository.AtualizarAsync(jogo);
+
+        // Event: estoque decrementado
+        await _eventStore.AppendAsync(
+            aggregateType: nameof(Jogo),
+            aggregateId: jogo.Id,
+            eventType: "EstoqueDecrementado",
+            data: new
+            {
+                jogoId = jogo.Id,
+                novoEstoque = jogo.Estoque,
+                motivo = "Compra aprovada",
+                compraId = compraCriada.Id
+            }
+        );
 
         return MapearParaResponse(compraCriada);
     }
@@ -158,6 +191,18 @@ public class CompraService : ICompraService
 
         compra.Status = status;
         var compraAtualizada = await _compraRepository.AtualizarAsync(compra);
+
+        // Event: status atualizado
+        await _eventStore.AppendAsync(
+            aggregateType: nameof(Compra),
+            aggregateId: compraAtualizada.Id,
+            eventType: "CompraStatusAtualizado",
+            data: new
+            {
+                compraId = compraAtualizada.Id,
+                novoStatus = compraAtualizada.Status.ToString()
+            }
+        );
         return MapearParaResponse(compraAtualizada);
     }
 
@@ -173,12 +218,28 @@ public class CompraService : ICompraService
         compra.Status = StatusCompra.Cancelada;
         await _compraRepository.AtualizarAsync(compra);
 
+        // Event: compra cancelada
+        await _eventStore.AppendAsync(
+            aggregateType: nameof(Compra),
+            aggregateId: compra.Id,
+            eventType: "CompraCancelada",
+            data: new { compraId = compra.Id }
+        );
+
         // Restaura o estoque do jogo
         var jogo = await _jogoRepository.ObterPorIdAsync(compra.JogoId);
         if (jogo != null)
         {
             jogo.Estoque++;
             await _jogoRepository.AtualizarAsync(jogo);
+
+            // Event: estoque incrementado
+            await _eventStore.AppendAsync(
+                aggregateType: nameof(Jogo),
+                aggregateId: jogo.Id,
+                eventType: "EstoqueIncrementado",
+                data: new { jogoId = jogo.Id, novoEstoque = jogo.Estoque, motivo = "Compra cancelada", compraId = compra.Id }
+            );
         }
     }
 
@@ -196,6 +257,14 @@ public class CompraService : ICompraService
         compra.DataAtivacao = DateTimeOffset.UtcNow;
 
         await _compraRepository.AtualizarAsync(compra);
+
+        // Event: código de ativação gerado
+        await _eventStore.AppendAsync(
+            aggregateType: nameof(Compra),
+            aggregateId: compra.Id,
+            eventType: "CompraCodigoAtivacaoGerado",
+            data: new { compraId = compra.Id, codigoAtivacao }
+        );
         return codigoAtivacao;
     }
 
