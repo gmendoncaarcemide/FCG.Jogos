@@ -11,29 +11,15 @@ EXPOSE 8080
 FROM mcr.microsoft.com/dotnet/sdk:8.0-alpine AS build
 WORKDIR /src
 
-# Copy solution and project files for better layer caching
-COPY FCG.Jogos.sln ./
-COPY FCG.Jogos.API/FCG.Jogos.API.csproj FCG.Jogos.API/
-COPY FCG.Jogos.Application/FCG.Jogos.Application.csproj FCG.Jogos.Application/
-COPY FCG.Jogos.Domain/FCG.Jogos.Domain.csproj FCG.Jogos.Domain/
-COPY FCG.Jogos.Infrastructure/FCG.Jogos.Infrastructure.csproj FCG.Jogos.Infrastructure/
+# Copy only the solution subset we need from the monorepo
+COPY FCG.Jogos/ ./FCG.Jogos/
 
-# Restore dependencies
-RUN dotnet restore FCG.Jogos.API/FCG.Jogos.API.csproj
-
-# Copy the rest of the source
-COPY . .
-WORKDIR /src/FCG.Jogos.API
-
-# Build
-RUN dotnet build -c Release -o /app/build
-
-# Publish
-FROM build AS publish
-RUN dotnet publish -c Release -o /app/publish /p:UseAppHost=false
+# Restore and publish
+RUN dotnet restore "FCG.Jogos/FCG.Jogos.API/FCG.Jogos.API.csproj"
+RUN dotnet publish "FCG.Jogos/FCG.Jogos.API/FCG.Jogos.API.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
 # Final runtime image
-FROM base AS final
+FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine AS final
 WORKDIR /app
-COPY --from=publish /app/publish .
+COPY --from=build /app/publish .
 ENTRYPOINT ["dotnet", "FCG.Jogos.API.dll"]
