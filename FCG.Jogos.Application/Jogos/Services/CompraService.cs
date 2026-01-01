@@ -8,6 +8,7 @@ using FCG.Jogos.Domain.Jogos.Entities;
 using FCG.Jogos.Domain.Jogos.Interfaces;
 using Microsoft.Extensions.Configuration;
 using FCG.Jogos.Domain.Base;
+using Microsoft.Extensions.Logging;
 
 namespace FCG.Jogos.Application.Jogos.Services;
 
@@ -18,14 +19,16 @@ public class CompraService : ICompraService
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _configuration;
     private readonly IEventStore _eventStore;
+    private readonly ILogger<CompraService> _logger;
 
-    public CompraService(ICompraRepository compraRepository, IJogoRepository jogoRepository, IHttpClientFactory httpClientFactory, IConfiguration configuration, IEventStore eventStore)
+    public CompraService(ICompraRepository compraRepository, IJogoRepository jogoRepository, IHttpClientFactory httpClientFactory, IConfiguration configuration, IEventStore eventStore, ILogger<CompraService> logger)
     {
         _compraRepository = compraRepository;
         _jogoRepository = jogoRepository;
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
         _eventStore = eventStore;
+        _logger = logger;
     }
 
     public async Task<CompraResponse> CriarCompraAsync(CompraRequest request)
@@ -266,6 +269,73 @@ public class CompraService : ICompraService
             data: new { compraId = compra.Id, codigoAtivacao }
         );
         return codigoAtivacao;
+    }
+
+    public async Task<Guid> RegistrarCompraAsync(Guid usuarioId, Guid jogoId, Guid transacaoId, decimal valorPago)
+    {
+        _logger.LogInformation(
+            "Registering purchase for User {UsuarioId}, Game {JogoId}, Transaction {TransacaoId}",
+            usuarioId, jogoId, transacaoId);
+
+        var jogo = await _jogoRepository.ObterPorIdAsync(jogoId);
+        if (jogo == null)
+        {
+            _logger.LogError("Game {JogoId} not found", jogoId);
+            throw new InvalidOperationException("Jogo não encontrado");
+        }
+
+        var compra = new Compra
+        {
+            UsuarioId = usuarioId,
+            JogoId = jogoId,
+            PrecoPago = valorPago,
+            DataCompra = DateTimeOffset.UtcNow,
+            Status = StatusCompra.Aprovada,
+            Observacoes = $"Compra registrada via evento de pagamento aprovado. Transação: {transacaoId}"
+        };
+
+        var compraCriada = await _compraRepository.AdicionarAsync(compra);
+
+        await _eventStore.AppendAsync(
+            aggregateType: nameof(Compra),
+            aggregateId: compraCriada.Id,
+            eventType: "CompraAprovada",
+            data: new
+            {
+                compraId = compraCriada.Id,
+                usuarioId = compraCriada.UsuarioId,
+                jogoId = compraCriada.JogoId,
+                precoPago = compraCriada.PrecoPago,
+                dataCompra = compraCriada.DataCompra,
+                status = compraCriada.Status.ToString(),
+                transacaoId = transacaoId
+            }
+        );
+
+        if (jogo.Estoque > 0)
+        {
+            jogo.Estoque--;
+            await _jogoRepository.AtualizarAsync(jogo);
+
+            await _eventStore.AppendAsync(
+                aggregateType: nameof(Jogo),
+                aggregateId: jogo.Id,
+                eventType: "EstoqueDecrementado",
+                data: new
+                {
+                    jogoId = jogo.Id,
+                    novoEstoque = jogo.Estoque,
+                    motivo = "Compra aprovada via evento",
+                    compraId = compraCriada.Id
+                }
+            );
+        }
+
+        _logger.LogInformation(
+            "Purchase {CompraId} registered successfully",
+            compraCriada.Id);
+
+        return compraCriada.Id;
     }
 
     private static CompraResponse MapearParaResponse(Compra compra)

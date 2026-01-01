@@ -26,6 +26,7 @@
   <ItemGroup>
     <ProjectReference Include="..\FCG.Jogos.Application\FCG.Jogos.Application.csproj" />
     <ProjectReference Include="..\FCG.Jogos.Infrastructure\FCG.Jogos.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\FCG.Shared.Messaging\FCG.Shared.Messaging.csproj" />
   </ItemGroup>
 
   <!-- Ensure no stale API process locks bin/obj before build (Windows only) -->

@@ -8,6 +8,10 @@ using FCG.Jogos.Infrastructure.Jogos.Search;
 using Microsoft.EntityFrameworkCore;
 using FCG.Jogos.Domain.Base;
 using FCG.Jogos.Infrastructure.Jogos.EventSourcing;
+using FCG.Jogos.Application.Messaging.Extensions;
+using FCG.Jogos.Application.Messaging.Interfaces;
+using FCG.Jogos.Application.Messaging.Events;
+using FCG.Jogos.Application.EventHandlers;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -58,6 +62,12 @@ builder.Services.AddScoped<IJogoService, JogoService>();
 builder.Services.AddScoped<ICompraService, CompraService>();
 builder.Services.AddScoped<IJogoSearchService, JogoSearchService>();
 
+// RabbitMQ
+builder.Services.AddRabbitMQMessaging(builder.Configuration);
+
+builder.Services.AddScoped<IEventHandler<PagamentoAprovadoEvent>, PagamentoAprovadoEventHandler>();
+builder.Services.AddScoped<IEventHandler<CompraRealizadaEvent>, CompraRealizadaEventHandler>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -67,7 +77,7 @@ var app = builder.Build();
     app.UseSwaggerUI();
 // }
 
-app.UseHttpsRedirection();
+// app.UseHttpsRedirection(); // Disabled for local development with Docker
 
 // Map controllers
 app.MapControllers();
@@ -82,74 +92,26 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var context = scope.ServiceProvider.GetRequiredService<JogosDbContext>();
-        var cfg = scope.ServiceProvider.GetRequiredService<IConfiguration>();
-        var useInMemory = cfg.GetValue<bool>("UseInMemoryDatabase") ||
-                          string.Equals(cfg.GetValue<string>("DatabaseProvider"), "InMemory", StringComparison.OrdinalIgnoreCase);
-
-        if (useInMemory)
-        {
-            context.Database.EnsureCreated();
-            logger.LogInformation("InMemory database ensured created.");
-
-            // Seed básico para desenvolvimento
-            if (!context.Jogos.Any())
-            {
-                var seed = new List<Jogo>
-                {
-                    new Jogo
-                    {
-                        Titulo = "Space Adventure",
-                        Descricao = "Jogo de aventura espacial",
-                        Desenvolvedor = "Studio A",
-                        Editora = "Editora X",
-                        DataLancamento = DateTimeOffset.UtcNow.AddDays(-30),
-                        Preco = 99.90m,
-                        ImagemUrl = null,
-                        VideoUrl = null,
-                        Tags = new List<string>{"espaco","aventura"},
-                        Plataformas = new List<string>{"PC","Xbox"},
-                        Categoria = CategoriaJogo.Aventura,
-                        Classificacao = ClassificacaoIndicativa.Livre,
-                        AvaliacaoMedia = 4,
-                        NumeroAvaliacoes = 10,
-                        Disponivel = true,
-                        Estoque = 100
-                    },
-                    new Jogo
-                    {
-                        Titulo = "Racing Pro",
-                        Descricao = "Corrida de alta velocidade",
-                        Desenvolvedor = "Studio B",
-                        Editora = "Editora Y",
-                        DataLancamento = DateTimeOffset.UtcNow.AddDays(-10),
-                        Preco = 149.90m,
-                        ImagemUrl = null,
-                        VideoUrl = null,
-                        Tags = new List<string>{"corrida","carros"},
-                        Plataformas = new List<string>{"PC","PlayStation"},
-                        Categoria = CategoriaJogo.Corrida,
-                        Classificacao = ClassificacaoIndicativa.Livre,
-                        AvaliacaoMedia = 5,
-                        NumeroAvaliacoes = 25,
-                        Disponivel = true,
-                        Estoque = 50
-                    }
-                };
-
-                context.Jogos.AddRange(seed);
-                context.SaveChanges();
-                logger.LogInformation("InMemory database seeded with {Count} jogos.", seed.Count);
-            }
-        }
-        else
-        {
-            context.Database.Migrate();
-            logger.LogInformation("Database migration completed successfully.");
-        }
+        logger.LogInformation("Applying database migrations...");
+        context.Database.Migrate();
+        logger.LogInformation("Database migrations applied successfully.");
     }
     catch (Exception ex)
     {
         logger.LogWarning(ex, "Database migration skipped: unable to connect or apply migrations at startup.");
+    }
+
+    // Subscribe to RabbitMQ events
+    try
+    {
+        var eventBus = scope.ServiceProvider.GetRequiredService<IEventBus>();
+        eventBus.Subscribe<PagamentoAprovadoEvent, PagamentoAprovadoEventHandler>();
+        eventBus.Subscribe<CompraRealizadaEvent, CompraRealizadaEventHandler>();
+        logger.LogInformation("RabbitMQ event subscriptions registered successfully.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogWarning(ex, "Failed to register RabbitMQ event subscriptions.");
     }
 }
 
