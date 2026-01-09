@@ -30,11 +30,11 @@ spec:
         - name: RabbitMQ__HostName
           value: "rabbitmq" # <--- AJUSTE AQUI
         - name: RabbitMQ__Port
-          value: "5672"
+          value: "5672" # <--- AJUSTE AQUI
         - name: RabbitMQ__UserName
-          value: "guest"
+          value: "guest" # <--- AJUSTE AQUI
         - name: RabbitMQ__Password
-          value: "guest"
+          value: "guest" # <--- AJUSTE AQUI
         livenessProbe:
           httpGet:
             path: /swagger/index.html
