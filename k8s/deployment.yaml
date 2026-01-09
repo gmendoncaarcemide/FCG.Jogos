@@ -24,17 +24,15 @@ spec:
           limits:
             cpu: "200m"
             memory: "256Mi"
-        env:
-        - name: ASPNETCORE_ENVIRONMENT
-          value: "Production"
-        - name: RabbitMQ__HostName
-          value: "rabbitmq" # <--- AJUSTE AQUI
-        - name: RabbitMQ__Port
-          value: "5672" # <--- AJUSTE AQUI
-        - name: RabbitMQ__UserName
-          value: "guest" # <--- AJUSTE AQUI
-        - name: RabbitMQ__Password
-          value: "guest" # <--- AJUSTE AQUI
+        args:
+          - "--ASPNETCORE_ENVIRONMENT=Production"
+          - "--RabbitMQ__HostName=toucan-01.lmq.cloudamqp.com"
+          - "--RabbitMQ__Port=5671"
+          - "--RabbitMQ__UserName=evqzzejc"
+          - "--RabbitMQ__Password=k9lXTGOnuZ3j_5eVkKisS9iWa32lbf0j4"
+          - "--RabbitMQ__VirtualHost=evqzzejc"
+          - "--RabbitMQ__Ssl__Enabled=true"
+          - "--RabbitMQ__Ssl__ServerName=toucan-01.lmq.cloudamqp.com"
         livenessProbe:
           httpGet:
             path: /swagger/index.html
