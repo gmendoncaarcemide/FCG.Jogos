@@ -8,6 +8,7 @@ using FCG.Jogos.Infrastructure.Jogos.Search;
 using Microsoft.EntityFrameworkCore;
 using FCG.Jogos.Domain.Base;
 using FCG.Jogos.Infrastructure.Jogos.EventSourcing;
+using Serilog;
 using FCG.Jogos.Application.Messaging.Extensions;
 using FCG.Jogos.Application.Messaging.Interfaces;
 using FCG.Jogos.Application.Messaging.Events;
@@ -20,6 +21,16 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddControllers();
 builder.Services.AddHttpClient();
+
+// Application Insights APM
+builder.Services.AddApplicationInsightsTelemetry(options =>
+{
+    options.ConnectionString = builder.Configuration["ApplicationInsights:ConnectionString"];
+});
+
+Log.Logger = new LoggerConfiguration()
+    .ReadFrom.Configuration(builder.Configuration)
+    .CreateLogger();
 
 // Database
 builder.Services.AddDbContext<JogosDbContext>(options =>
